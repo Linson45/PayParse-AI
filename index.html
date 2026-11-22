@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payslip template editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/konva@9.3.18/konva.min.js"></script>
+<style>
+  :root {
+    --desk: #dde2e8;
+    --panel: #f7f8fa;
+    --line: #cbd2da;
+    --ink: #1d2733;
+    --muted: #5b6776;
+    --accent: #1f5f8b;
+    --accent-soft: #e3eef6;
+    --mark: #fce7a8;
+    --mark-edge: #c58b1c;
+    --danger: #b42318;
+    --radius: 6px;
+    font-family: "Public Sans", "Segoe UI", system-ui, sans-serif;
+    color: var(--ink);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body { display: grid; grid-template-rows: auto auto 1fr auto; background: var(--desk); font-size: 14px; }
+
+  button, select, input, textarea { font: inherit; color: inherit; }
+  button {
+    border: 1px solid var(--line); background: #fff; border-radius: var(--radius);
+    padding: 6px 12px; cursor: pointer; white-space: nowrap;
+  }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+  }
+  button:disabled { opacity: .45; cursor: default; border-color: var(--line); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.danger { color: var(--danger); }
+  button.danger:hover { border-color: var(--danger); }
+  button.tool[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+
+  header {
+    display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+    background: var(--ink); color: #fff;
+  }
+  header h1 { font-size: 16px; font-weight: 700; margin: 0 16px 0 0; letter-spacing: .01em; }
+  header .doc-name { color: #b8c3cf; margin-right: auto; overflow: hidden; text-overflow: ellipsis; }
+  header button { background: transparent; color: #fff; border-color: #44515f; }
+  header button:hover { border-color: #fff; }
+  header button.primary { background: var(--mark); color: var(--ink); border-color: var(--mark); }
+
+  .toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 16px;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  .toolbar .sep { width: 1px; height: 24px; background: var(--line); margin: 0 6px; }
+  .toolbar .zoom { min-width: 48px; text-align: center; color: var(--muted); }
+  .toolbar label.toggle { display: flex; align-items: center; gap: 6px; margin-left: auto; color: var(--muted); }
+
+  main { display: grid; grid-template-columns: 250px 1fr 270px; min-height: 0; }
+  aside { background: var(--panel); overflow-y: auto; padding: 14px; }
+  aside.left { border-right: 1px solid var(--line); }
+  aside.right { border-left: 1px solid var(--line); }
+  aside h2 { font-size: 13px; font-weight: 700; margin: 0 0 10px; color: var(--muted); }
+
+  .field-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 4px; }
+  .field-list li {
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 6px; align-items: center;
+    padding: 6px 8px; border-radius: var(--radius); border: 1px solid transparent; cursor: pointer;
+  }
+  .field-list li:hover { background: #fff; border-color: var(--line); }
+  .field-list li.active { background: #fff; border-color: var(--mark-edge); }
+  .field-list .key {
+    font-weight: 600; background: var(--mark); border-radius: 3px; padding: 0 4px; justify-self: start;
+    overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  }
+  .field-list .example { grid-column: 1; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .field-list .uses { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 4px; }
+  .field-list .uses button { padding: 2px 8px; font-size: 12px; }
+  .empty-note { color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+  .canvas-wrap { overflow: auto; position: relative; padding: 28px; }
+  #stage { width: max-content; margin: 0 auto; box-shadow: 0 1px 2px rgba(29,39,51,.18), 0 8px 24px rgba(29,39,51,.12); }
+  .start {
+    position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 14px;
+  }
+  .start p { margin: 0; color: var(--muted); max-width: 36ch; line-height: 1.5; }
+  .start strong { font-size: 18px; color: var(--ink); }
+
+  .props { display: grid; gap: 12px; }
+  .props label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  .props input[type=text], .props input[type=number], .props select, .props textarea {
+    width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff;
+  }
+  .props textarea { min-height: 64px; resize: vertical; }
+  .props .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .props .check { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+  .props input[type=color] { width: 100%; height: 32px; padding: 2px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
+  .props .kind { font-weight: 700; color: var(--ink); font-size: 15px; }
+  .props hr { border: 0; border-top: 1px solid var(--line); margin: 2px 0; width: 100%; }
+  .hint { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 0; }
+
+  footer {
+    padding: 6px 16px; font-size: 13px; color: var(--muted); background: var(--panel);
+    border-top: 1px solid var(--line); min-height: 30px;
+  }
+  footer.error { color: var(--danger); }
+
+  dialog { border: 1px solid var(--line); border-radius: 8px; padding: 18px; min-width: 320px; }
+  dialog::backdrop { background: rgba(29,39,51,.35); }
+  dialog h3 { margin: 0 0 12px; font-size: 16px; }
+  dialog ul { list-style: none; padding: 0; margin: 0 0 14px; display: grid; gap: 4px; max-height: 300px; overflow: auto; }
+  dialog li button { width: 100%; text-align: left; }
+  dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; }
+    aside.left, aside.right { border: 0; max-height: 30vh; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Payslip templates</h1>
+  <span class="doc-name" id="docName">No template open</span>
+  <button id="btnOpenPdf">Open PDF</button>
+  <button id="btnOpenSaved">Open saved</button>
+  <button id="btnSave" disabled>Save</button>
+  <button id="btnPreview" disabled>Preview PDF</button>
+  <button id="btnCsv" disabled>Download worker sheet</button>
+  <button id="btnGenerate" class="primary" disabled>Generate payslips</button>
+</header>
+
+<div class="toolbar" role="toolbar" aria-label="Editing tools">
+  <button class="tool" id="addText" disabled>Add text</button>
+  <button class="tool" id="addField" disabled>Add field</button>
+  <button class="tool" id="addLine" disabled>Add line</button>
+  <button class="tool" id="addBox" disabled>Add box</button>
+  <button class="tool" id="addImage" disabled>Add image</button>
+  <span class="sep"></span>
+  <button id="undo" disabled title="Ctrl+Z">Undo</button>
+  <button id="redo" disabled title="Ctrl+Y">Redo</button>
+  <button id="del" class="danger" disabled title="Delete key">Delete</button>
+  <span class="sep"></span>
+  <button id="zoomOut" disabled aria-label="Zoom out">−</button>
+  <span class="zoom" id="zoomLabel">100%</span>
+  <button id="zoomIn" disabled aria-label="Zoom in">+</button>
+  <select id="pageSel" hidden aria-label="Page"></select>
+  <label class="toggle"><input type="checkbox" id="showValues"> Show sample values</label>
+</div>
+
+<main>
+  <aside class="left">
+    <h2>Fields</h2>
+    <ul class="field-list" id="fieldList"></ul>
+    <p class="empty-note" id="fieldEmpty">Fields are the values that change for each worker, like name or salary. They appear here after you open a PDF.</p>
+    <button id="newField" disabled>New field</button>
+  </aside>
+
+  <section class="canvas-wrap" id="canvasWrap">
+    <div id="stage"></div>
+    <div class="start" id="start">
+      <strong>Open a payslip or bill to start</strong>
+      <p>The PDF is turned into a template. Then you can move, delete or add text, fields, lines and logos.</p>
+      <div><button class="primary" id="btnOpenPdf2">Open PDF</button></div>
+    </div>
+  </section>
+
+  <aside class="right">
+    <h2>Properties</h2>
+    <div class="props" id="props"><p class="hint">Click something on the page to change it. Drag on an empty spot to select several items. Hold Shift to add to the selection.</p></div>
+  </aside>
+</main>
+
+<footer id="status">Ready.</footer>
+
+<input type="file" id="filePdf" accept="application/pdf" hidden>
+<input type="file" id="fileImage" accept="image/*" hidden>
+<input type="file" id="fileReplace" accept="image/*" hidden>
+<input type="file" id="fileCsv" accept=".csv,text/csv" hidden>
+
+<dialog id="dlgOpen">
+  <h3>Open a saved template</h3>
+  <ul id="savedList"></ul>
+  <div class="actions"><button id="dlgOpenClose">Close</button></div>
+</dialog>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+const ASC = 0.8;           // text baseline sits this far (× font size) below the top
+const FONT = "Helvetica, Arial, 'Liberation Sans', sans-serif";
+const S = {
+  tpl: null, page: 0, scale: 1.4, selected: new Set(), showValues: false,
+  history: [], future: [], dragSnapshot: false,
+};
+const $ = (id) => document.getElementById(id);
+const imgCache = new Map();
+
+// ---------------------------------------------------------------------------
+// Konva setup
+// ---------------------------------------------------------------------------
+const stage = new Konva.Stage({ container: "stage", width: 10, height: 10 });
+const layer = new Konva.Layer();
+const uiLayer = new Konva.Layer();
+stage.add(layer, uiLayer);
+const tr = new Konva.Transformer({
+  rotateEnabled: false, flipEnabled: false, keepRatio: false, ignoreStroke: true,
+  borderStroke: "#1f5f8b", anchorStroke: "#1f5f8b", anchorSize: 8, padding: 2,
+});
+uiLayer.add(tr);
+const band = new Konva.Rect({ fill: "rgba(31,95,139,.08)", stroke: "#1f5f8b", strokeWidth: 1, visible: false });
+uiLayer.add(band);
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function status(msg, isError = false) {
+  const f = $("status"); f.textContent = msg; f.classList.toggle("error", isError);
+}
+function uid() { return Math.random().toString(16).slice(2, 10); }
+function el(id) { return S.tpl.elements.find((e) => e.id === id); }
+function selectedEls() { return S.tpl ? S.tpl.elements.filter((e) => S.selected.has(e.id)) : []; }
+function fieldDef(key) { return S.tpl.fields.find((f) => f.key === key); }
+function hex(c, fallback = "#000000") { return /^#[0-9a-f]{6}$/i.test(c || "") ? c.toLowerCase() : fallback; }
+function round(v) { return Math.round(v * 100) / 100; }
+
+function snapshot() {
+  S.history.push(JSON.stringify(S.tpl));
+  if (S.history.length > 80) S.history.shift();
+  S.future = [];
+}
+function mutate(fn) { snapshot(); fn(); render(); }
+function undo() {
+  if (!S.history.length) return;
+  S.future.push(JSON.stringify(S.tpl)); S.tpl = JSON.parse(S.history.pop());
+  S.selected = new Set([...S.selected].filter((id) => el(id))); render();
+}
+function redo() {
+  if (!S.future.length) return;
+  S.history.push(JSON.stringify(S.tpl)); S.tpl = JSON.parse(S.future.pop());
+  S.selected = new Set([...S.selected].filter((id) => el(id))); render();
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(path, options);
+  if (!res.ok) {
+    let msg = `${res.status} ${res.statusText}`;
+    try { msg = (await res.json()).detail || msg; } catch (_) {}
+    throw new Error(msg);
+  }
+  return res;
+}
+function download(blob, filename) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function readAsDataURL(file) {
+  return new Promise((ok, fail) => {
+    const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = fail; r.readAsDataURL(file);
+  });
+}
+function loadImage(src) {
+  if (imgCache.has(src)) return imgCache.get(src);
+  const img = new Image(); img.src = src; img.onload = () => layer.batchDraw();
+  imgCache.set(src, img); return img;
+}
+
+// ---------------------------------------------------------------------------
+// Drawing elements on the canvas
+// ---------------------------------------------------------------------------
+function makeNode(e) {
+  const common = { id: e.id, draggable: true, name: "el" };
+  switch (e.type) {
+    case "rect":
+      return new Konva.Rect({ ...common, x: e.x, y: e.y, width: e.w, height: e.h,
+        stroke: e.stroke || undefined, fill: e.fill || undefined, strokeWidth: e.stroke ? e.width || 1 : 0,
+        // keep borderless, unfilled boxes clickable
+        hitFunc: (e.stroke || e.fill) ? undefined : function (ctx, shape) {
+          ctx.beginPath(); ctx.rect(0, 0, shape.width(), shape.height()); ctx.closePath(); ctx.fillStrokeShape(shape);
+        } });
+    case "line": {
+      const w = e.width || 1;
+      const dash = e.style === "dotted" ? [Math.max(w, 1), Math.max(w, 1) * 2]
+                 : e.style === "dashed" ? [4, 3] : undefined;
+      return new Konva.Line({ ...common, points: [e.x1, e.y1, e.x2, e.y2], stroke: hex(e.color),
+        strokeWidth: w, dash, hitStrokeWidth: Math.max(8 / S.scale, w + 4) });
+    }
+    case "image":
+      return new Konva.Image({ ...common, x: e.x, y: e.y, width: e.w, height: e.h, image: loadImage(e.src) });
+    case "text":
+      return new Konva.Text({ ...common, x: e.x, y: e.y - e.size * ASC, text: e.text, fontSize: e.size,
+        fontFamily: FONT, fontStyle: e.bold ? "bold" : "normal", fill: hex(e.color), lineHeight: 1 });
+    case "field": {
+      const def = fieldDef(e.key);
+      const label = S.showValues ? (def?.example || "") || `{{${e.key}}}` : `{{${e.key}}}`;
+      const g = new Konva.Group({ ...common, x: e.x, y: e.y - e.size * ASC });
+      const t = new Konva.Text({ text: label, fontSize: e.size, fontFamily: FONT,
+        fontStyle: e.bold ? "bold" : "normal", fill: hex(e.color), lineHeight: 1 });
+      g.add(new Konva.Rect({ x: -1, y: -1, width: t.width() + 2, height: t.height() + 2,
+        fill: "#fce7a8", stroke: "#c58b1c", strokeWidth: 0.5, cornerRadius: 1.5 }));
+      g.add(t);
+      return g;
+    }
+  }
+}
+
+function render() {
+  const has = !!S.tpl;
+  $("start").hidden = has;
+  $("stage").hidden = !has;
+  for (const id of ["btnSave", "btnPreview", "btnCsv", "btnGenerate", "addText", "addField", "addLine",
+    "addBox", "addImage", "zoomIn", "zoomOut", "newField"]) $(id).disabled = !has;
+  $("undo").disabled = !S.history.length;
+  $("redo").disabled = !S.future.length;
+  $("del").disabled = !S.selected.size;
+  $("zoomLabel").textContent = Math.round(S.scale / 1.4 * 100) + "%";
+  if (!has) return;
+
+  $("docName").textContent = S.tpl.name || "Untitled template";
+  const pg = S.tpl.pages[S.page];
+  stage.size({ width: pg.width * S.scale, height: pg.height * S.scale });
+  stage.scale({ x: S.scale, y: S.scale });
+
+  layer.destroyChildren();
+  layer.add(new Konva.Rect({ x: 0, y: 0, width: pg.width, height: pg.height, fill: "#fff", name: "paper" }));
+  for (const e of S.tpl.elements) {
+    if ((e.page || 0) !== S.page) continue;
+    const node = makeNode(e);
+    if (node) layer.add(node);
+  }
+  layer.draw();
+  syncTransformer();
+  renderPages();
+  renderFields();
+  renderProps();
+}
+
+function syncTransformer() {
+  const nodes = [...S.selected].map((id) => layer.findOne("#" + id)).filter(Boolean);
+  tr.nodes(nodes);
+  const single = nodes.length === 1 ? el(nodes[0].id()) : null;
+  const resizable = single && (single.type === "image" || single.type === "rect");
+  tr.enabledAnchors(resizable ? ["top-left", "top-right", "bottom-left", "bottom-right",
+    "middle-left", "middle-right", "top-center", "bottom-center"] : []);
+  tr.keepRatio(!!single && single.type === "image");
+  uiLayer.draw();
+}
+
+function renderPages() {
+  const sel = $("pageSel");
+  sel.hidden = S.tpl.pages.length < 2;
+  if (sel.options.length !== S.tpl.pages.length) {
+    sel.innerHTML = S.tpl.pages.map((_, i) => `<option value="${i}">Page ${i + 1}</option>`).join("");
+  }
+  sel.value = S.page;
+}
+
+function renderFields() {
+  const list = $("fieldList");
+  const counts = {};
+  for (const e of S.tpl.elements) if (e.type === "field") counts[e.key] = (counts[e.key] || 0) + 1;
+  const selKeys = new Set(selectedEls().filter((e) => e.type === "field").map((e) => e.key));
+  $("fieldEmpty").hidden = S.tpl.fields.length > 0;
+  list.innerHTML = "";
+  for (const f of S.tpl.fields) {
+    const li = document.createElement("li");
+    li.className = selKeys.has(f.key) ? "active" : "";
+    li.innerHTML = `<span class="key"></span><span class="example"></span>
+      <span class="uses"><button title="Put this field on the page">Place</button></span>`;
+    li.querySelector(".key").textContent = f.key;
+    li.querySelector(".example").textContent = counts[f.key] ? (f.example || "no sample value") : "not on the page";
+    li.addEventListener("click", () => {
+      S.selected = new Set(S.tpl.elements.filter((e) => e.type === "field" && e.key === f.key && (e.page || 0) === S.page).map((e) => e.id));
+      syncTransformer(); renderFields(); renderProps(); $("del").disabled = !S.selected.size;
+    });
+    li.querySelector("button").addEventListener("click", (ev) => { ev.stopPropagation(); placeField(f.key); });
+    list.appendChild(li);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Properties panel
+// ---------------------------------------------------------------------------
+function renderProps() {
+  const box = $("props");
+  const sel = selectedEls();
+  if (!sel.length) {
+    box.innerHTML = `<p class="hint">Click something on the page to change it. Drag on an empty spot to select several items. Hold Shift to add to the selection.</p>`;
+    return;
+  }
+  if (sel.length > 1) {
+    box.innerHTML = `<div class="kind">${sel.length} items selected</div>
+      <p class="hint">Drag any of them to move them together, or use the arrow keys.</p>
+      <button class="danger" id="pDel">Delete ${sel.length} items</button>`;
+    $("pDel").onclick = deleteSelected;
+    return;
+  }
+  const e = sel[0];
+  const names = { text: "Text", field: "Field", line: "Line", rect: "Box", image: "Image" };
+  let html = `<div class="kind">${names[e.type]}</div>`;
+
+  if (e.type === "text") {
+    html += `<label>Text<textarea data-k="text"></textarea></label>`;
+  }
+  if (e.type === "field") {
+    const def = fieldDef(e.key) || { key: e.key, label: "", example: "" };
+    html += `<label>Field name (CSV column)<input type="text" data-def="key"></label>
+      <label>Sample value<input type="text" data-def="example"></label>
+      <p class="hint">Renaming changes it everywhere on the template. Use the same name as the column in your worker sheet.</p>`;
+    box._def = def;
+  }
+  if (e.type === "text" || e.type === "field") {
+    html += `<div class="row"><label>Size<input type="number" min="4" max="72" step="0.5" data-k="size" data-num></label>
+      <label>Color<input type="color" data-k="color"></label></div>
+      <label class="check"><input type="checkbox" data-k="bold"> Bold</label>`;
+  }
+  if (e.type === "line") {
+    html += `<label>Style<select data-k="style"><option value="solid">Solid</option><option value="dotted">Dotted</option><option value="dashed">Dashed</option></select></label>
+      <div class="row"><label>Thickness<input type="number" min="0.25" max="10" step="0.25" data-k="width" data-num></label>
+      <label>Color<input type="color" data-k="color"></label></div>
+      <div class="row"><button id="pHoriz">Make straight</button><label>Length<input type="number" min="5" step="1" id="pLen"></label></div>`;
+  }
+  if (e.type === "rect") {
+    html += `<div class="row"><label>Border<input type="color" data-k="stroke"></label>
+      <label>Fill<input type="color" data-k="fill"></label></div>
+      <div class="row"><label class="check"><input type="checkbox" id="pNoStroke"> No border</label>
+      <label class="check"><input type="checkbox" id="pNoFill"> No fill</label></div>
+      <label>Border thickness<input type="number" min="0.25" max="10" step="0.25" data-k="width" data-num></label>`;
+  }
+  if (e.type === "rect" || e.type === "image") {
+    html += `<div class="row"><label>Width<input type="number" min="2" step="1" data-k="w" data-num></label>
+      <label>Height<input type="number" min="2" step="1" data-k="h" data-num></label></div>`;
+  }
+  if (e.type === "image") html += `<button id="pReplace">Replace image</button>`;
+  if (e.type !== "line") {
+    html += `<div class="row"><label>Left<input type="number" step="1" data-k="x" data-num></label>
+      <label>${e.type === "text" || e.type === "field" ? "Baseline" : "Top"}<input type="number" step="1" data-k="y" data-num></label></div>`;
+  }
+  html += `<hr><button class="danger" id="pDel">Delete</button>`;
+  box.innerHTML = html;
+
+  // fill values
+  box.querySelectorAll("[data-k]").forEach((inp) => {
+    const k = inp.dataset.k, v = e[k];
+    if (inp.type === "checkbox") inp.checked = !!v;
+    else if (inp.type === "color") inp.value = hex(v, k === "fill" ? "#ffffff" : "#000000");
+    else inp.value = typeof v === "number" ? round(v) : (v ?? "");
+    inp.addEventListener("change", () => {
+      mutate(() => {
+        let val = inp.type === "checkbox" ? inp.checked : inp.value;
+        if (inp.dataset.num !== undefined) { val = parseFloat(val); if (isNaN(val)) return; }
+        e[k] = val;
+      });
+    });
+  });
+  box.querySelectorAll("[data-def]").forEach((inp) => {
+    const def = box._def; inp.value = def[inp.dataset.def] || "";
+    inp.addEventListener("change", () => {
+      if (inp.dataset.def === "key") renameField(e.key, inp.value);
+      else mutate(() => { const d = fieldDef(e.key); if (d) d.example = inp.value; });
+    });
+  });
+  if ($("pNoStroke")) {
+    $("pNoStroke").checked = !e.stroke; $("pNoFill").checked = !e.fill;
+    $("pNoStroke").onchange = (ev) => mutate(() => { e.stroke = ev.target.checked ? null : "#000000"; });
+    $("pNoFill").onchange = (ev) => mutate(() => { e.fill = ev.target.checked ? null : "#e8edf3"; });
+  }
+  if ($("pHoriz")) {
+    const len = Math.hypot(e.x2 - e.x1, e.y2 - e.y1);
+    $("pLen").value = Math.round(len);
+    const vertical = Math.abs(e.x2 - e.x1) < Math.abs(e.y2 - e.y1);
+    $("pHoriz").onclick = () => mutate(() => { if (vertical) e.x2 = e.x1; else e.y2 = e.y1; });
+    $("pLen").onchange = (ev) => mutate(() => {
+      const L = parseFloat(ev.target.value); if (!(L > 0)) return;
+      const k = L / (len || 1); e.x2 = round(e.x1 + (e.x2 - e.x1) * k); e.y2 = round(e.y1 + (e.y2 - e.y1) * k);
+    });
+  }
+  if ($("pReplace")) $("pReplace").onclick = () => $("fileReplace").click();
+  $("pDel").onclick = deleteSelected;
+}
+
+// ---------------------------------------------------------------------------
+// Editing actions
+// ---------------------------------------------------------------------------
+function deleteSelected() {
+  if (!S.selected.size) return;
+  const n = S.selected.size;
+  mutate(() => { S.tpl.elements = S.tpl.elements.filter((e) => !S.selected.has(e.id)); S.selected.clear(); });
+  status(`Deleted ${n} item${n > 1 ? "s" : ""}. Press Ctrl+Z to undo.`);
+}
+
+let spotStep = 0;
+function visibleSpot() {
+  // near the top-left of what is visible, moved a little each time so new items don't pile up
+  const wrap = $("canvasWrap");
+  const off = (spotStep++ % 8) * 18;
+  const x = Math.max(20, wrap.scrollLeft / S.scale + 40) + off;
+  const y = Math.max(30, wrap.scrollTop / S.scale + 60) + off;
+  return { x: round(x), y: round(y) };
+}
+
+function addElement(e) {
+  mutate(() => { e.id = uid(); e.page = S.page; S.tpl.elements.push(e); S.selected = new Set([e.id]); });
+}
+
+function uniqueKey(base) {
+  let key = base, n = 2;
+  while (fieldDef(key)) key = `${base}_${n++}`;
+  return key;
+}
+
+function placeField(key) {
+  const p = visibleSpot();
+  addElement({ type: "field", key, x: p.x, y: p.y, size: 10, bold: false, color: "#000000" });
+  status(`Placed {{${key}}}. Drag it where the value should go.`);
+}
+
+function newField() {
+  const name = prompt("Field name (this becomes the column name in the worker sheet):", "new_field");
+  if (name === null) return;
+  const key = uniqueKey(name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "field");
+  snapshot();                                   // one undo step for the field and its box
+  S.tpl.fields.push({ key, label: name, example: "", type: "text" });
+  const p = visibleSpot();
+  S.tpl.elements.push({ id: uid(), page: S.page, type: "field", key, x: p.x, y: p.y, size: 10, bold: false, color: "#000000" });
+  S.selected = new Set([S.tpl.elements.at(-1).id]);
+  render();
+}
+
+function renameField(oldKey, wanted) {
+  const clean = wanted.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  if (!clean || clean === oldKey) { render(); return; }
+  if (fieldDef(clean)) {
+    // join with the existing field of that name
+    mutate(() => {
+      S.tpl.elements.forEach((e) => { if (e.type === "field" && e.key === oldKey) e.key = clean; });
+      S.tpl.fields = S.tpl.fields.filter((f) => f.key !== oldKey);
+    });
+    status(`Merged into the existing field {{${clean}}}.`);
+    return;
+  }
+  mutate(() => {
+    const d = fieldDef(oldKey); if (d) d.key = clean;
+    S.tpl.elements.forEach((e) => { if (e.type === "field" && e.key === oldKey) e.key = clean; });
+  });
+  status(`Renamed {{${oldKey}}} to {{${clean}}}.`);
+}
+
+function nudge(dx, dy) {
+  mutate(() => {
+    for (const e of selectedEls()) {
+      if (e.type === "line") { e.x1 += dx; e.x2 += dx; e.y1 += dy; e.y2 += dy; }
+      else { e.x += dx; e.y += dy; }
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Mouse: select, drag, resize, box-select
+// ---------------------------------------------------------------------------
+function nodeToElId(node) {
+  while (node && node !== layer) { if (node.hasName("el")) return node.id(); node = node.getParent(); }
+  return null;
+}
+
+stage.on("mousedown touchstart", (ev) => {
+  if (!S.tpl) return;
+  if (ev.target.getParent() === tr) return;           // resize handle
+  const id = nodeToElId(ev.target);
+  const shift = ev.evt.shiftKey;
+  if (id) {
+    if (shift) { S.selected.has(id) ? S.selected.delete(id) : S.selected.add(id); }
+    else if (!S.selected.has(id)) S.selected = new Set([id]);
+    syncTransformer(); renderProps(); renderFields(); $("del").disabled = !S.selected.size;
+    return;
+  }
+  // empty spot: start box selection
+  if (!shift) S.selected.clear();
+  const p = stage.getRelativePointerPosition();
+  band.setAttrs({ x: p.x, y: p.y, width: 0, height: 0, visible: true, strokeWidth: 1 / S.scale });
+  band._start = p;
+  syncTransformer(); renderProps(); renderFields(); $("del").disabled = !S.selected.size;
+});
+
+stage.on("mousemove touchmove", () => {
+  if (!band.visible()) return;
+  const p = stage.getRelativePointerPosition(), s = band._start;
+  band.setAttrs({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), width: Math.abs(p.x - s.x), height: Math.abs(p.y - s.y) });
+  uiLayer.batchDraw();
+});
+
+stage.on("mouseup touchend", () => {
+  if (!band.visible()) return;
+  band.visible(false);
+  const box = band.getClientRect();
+  if (box.width > 3 || box.height > 3) {
+    layer.find(".el").forEach((n) => {
+      if (Konva.Util.haveIntersection(box, n.getClientRect())) S.selected.add(n.id());
+    });
+  }
+  syncTransformer(); renderProps(); renderFields(); $("del").disabled = !S.selected.size;
+});
+
+layer.on("dragstart", (ev) => {
+  const id = nodeToElId(ev.target);
+  if (id && !S.selected.has(id)) { S.selected = new Set([id]); syncTransformer(); }
+  if (!S.dragSnapshot) { snapshot(); S.dragSnapshot = true; }
+});
+
+let commitTimer = null;
+layer.on("dragend", (ev) => {
+  const node = ev.target, e = el(node.id());
+  if (!e) return;
+  if (e.type === "line") {
+    const dx = node.x(), dy = node.y();
+    e.x1 = round(e.x1 + dx); e.x2 = round(e.x2 + dx); e.y1 = round(e.y1 + dy); e.y2 = round(e.y2 + dy);
+  } else if (e.type === "text" || e.type === "field") {
+    e.x = round(node.x()); e.y = round(node.y() + e.size * ASC);
+  } else { e.x = round(node.x()); e.y = round(node.y()); }
+  clearTimeout(commitTimer);
+  commitTimer = setTimeout(() => { S.dragSnapshot = false; render(); }, 0);
+});
+
+tr.on("transformstart", () => snapshot());
+tr.on("transformend", () => {
+  const node = tr.nodes()[0], e = node && el(node.id());
+  if (!e) return;
+  e.x = round(node.x()); e.y = round(node.y());
+  e.w = round(Math.max(2, node.width() * node.scaleX()));
+  e.h = round(Math.max(2, node.height() * node.scaleY()));
+  render();
+});
+
+// ---------------------------------------------------------------------------
+// Keyboard
+// ---------------------------------------------------------------------------
+document.addEventListener("keydown", (ev) => {
+  const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName);
+  if (typing || !S.tpl) return;
+  const ctrl = ev.ctrlKey || ev.metaKey;
+  if (ctrl && ev.key.toLowerCase() === "z" && !ev.shiftKey) { ev.preventDefault(); undo(); }
+  else if (ctrl && (ev.key.toLowerCase() === "y" || (ev.key.toLowerCase() === "z" && ev.shiftKey))) { ev.preventDefault(); redo(); }
+  else if (ev.key === "Delete" || ev.key === "Backspace") { ev.preventDefault(); deleteSelected(); }
+  else if (ev.key === "Escape") { S.selected.clear(); render(); }
+  else if (ev.key.startsWith("Arrow") && S.selected.size) {
+    ev.preventDefault();
+    const step = ev.shiftKey ? 10 : 1;
+    nudge(ev.key === "ArrowLeft" ? -step : ev.key === "ArrowRight" ? step : 0,
+          ev.key === "ArrowUp" ? -step : ev.key === "ArrowDown" ? step : 0);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Toolbar buttons
+// ---------------------------------------------------------------------------
+$("addText").onclick = () => { const p = visibleSpot(); addElement({ type: "text", text: "New text", x: p.x, y: p.y, size: 10, bold: false, color: "#000000" }); };
+$("addField").onclick = newField;
+$("newField").onclick = newField;
+$("addLine").onclick = () => { const p = visibleSpot(); addElement({ type: "line", x1: p.x, y1: p.y, x2: p.x + 200, y2: p.y, width: 1, color: "#000000", style: "solid" }); };
+$("addBox").onclick = () => { const p = visibleSpot(); addElement({ type: "rect", x: p.x, y: p.y, w: 160, h: 60, stroke: "#000000", fill: null, width: 1 }); };
+$("addImage").onclick = () => $("fileImage").click();
+$("undo").onclick = undo;
+$("redo").onclick = redo;
+$("del").onclick = deleteSelected;
+$("zoomIn").onclick = () => { S.scale = Math.min(4, S.scale * 1.2); render(); };
+$("zoomOut").onclick = () => { S.scale = Math.max(0.5, S.scale / 1.2); render(); };
+$("pageSel").onchange = (ev) => { S.page = +ev.target.value; S.selected.clear(); render(); };
+$("showValues").onchange = (ev) => { S.showValues = ev.target.checked; render(); };
+
+function imageSize(src, maxW = 160) {
+  return new Promise((ok) => {
+    const img = new Image();
+    img.onload = () => { const k = Math.min(1, maxW / img.width); ok({ w: round(img.width * k), h: round(img.height * k) }); };
+    img.src = src;
+  });
+}
+
+$("fileImage").onchange = async (ev) => {
+  const f = ev.target.files[0]; ev.target.value = ""; if (!f) return;
+  const src = await readAsDataURL(f); const { w, h } = await imageSize(src); const p = visibleSpot();
+  addElement({ type: "image", x: p.x, y: p.y, w, h, src });
+  status("Image added. Drag the corners to resize it.");
+};
+$("fileReplace").onchange = async (ev) => {
+  const f = ev.target.files[0]; ev.target.value = ""; const e = selectedEls()[0];
+  if (!f || !e || e.type !== "image") return;
+  const src = await readAsDataURL(f);
+  const size = await imageSize(src, 10000);
+  // fit the new picture inside the old one's box, keeping its shape
+  const k = Math.min(e.w / size.w, e.h / size.h);
+  mutate(() => { e.src = src; e.w = round(size.w * k); e.h = round(size.h * k); });
+  status("Image replaced.");
+};
+
+// ---------------------------------------------------------------------------
+// File actions (talk to the Python server)
+// ---------------------------------------------------------------------------
+function openTemplate(tpl) {
+  S.tpl = tpl; S.page = 0; S.selected.clear(); S.history = []; S.future = [];
+  const w = $("canvasWrap").clientWidth - 60;
+  S.scale = Math.max(0.6, Math.min(2, w / tpl.pages[0].width));
+  render();
+}
+
+$("btnOpenPdf").onclick = $("btnOpenPdf2").onclick = () => $("filePdf").click();
+$("filePdf").onchange = async (ev) => {
+  const f = ev.target.files[0]; ev.target.value = ""; if (!f) return;
+  status(`Reading ${f.name}…`);
+  try {
+    const fd = new FormData(); fd.append("file", f);
+    const tpl = await (await api("/api/extract", { method: "POST", body: fd })).json();
+    openTemplate(tpl);
+    status(`Found ${tpl.fields.length} fields in ${f.name}. Click anything to change it, or drag on an empty spot to select several items.`);
+  } catch (err) { status(`Could not open ${f.name}: ${err.message}`, true); }
+};
+
+$("btnSave").onclick = async () => {
+  const name = prompt("Save template as:", S.tpl.name || "payslip");
+  if (!name) return;
+  try {
+    const res = await (await api(`/api/templates/${encodeURIComponent(name)}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(S.tpl) })).json();
+    S.tpl.name = res.saved; render(); status(`Saved as ${res.saved}.`);
+  } catch (err) { status(`Could not save: ${err.message}`, true); }
+};
+
+$("btnOpenSaved").onclick = async () => {
+  try {
+    const names = await (await api("/api/templates")).json();
+    const ul = $("savedList"); ul.innerHTML = "";
+    if (!names.length) ul.innerHTML = `<li class="empty-note">No saved templates yet. Open a PDF and press Save.</li>`;
+    for (const n of names) {
+      const li = document.createElement("li"); const b = document.createElement("button");
+      b.textContent = n; li.appendChild(b); ul.appendChild(li);
+      b.onclick = async () => {
+        $("dlgOpen").close();
+        try { openTemplate(await (await api(`/api/templates/${encodeURIComponent(n)}`)).json()); status(`Opened ${n}.`); }
+        catch (err) { status(`Could not open ${n}: ${err.message}`, true); }
+      };
+    }
+    $("dlgOpen").showModal();
+  } catch (err) { status(`Could not list templates: ${err.message}`, true); }
+};
+$("dlgOpenClose").onclick = () => $("dlgOpen").close();
+
+$("btnPreview").onclick = async () => {
+  const win = window.open("", "_blank");            // open now so the browser doesn't block it
+  try {
+    const blob = await (await api("/api/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(S.tpl) })).blob();
+    const url = URL.createObjectURL(blob);
+    if (win) win.location = url; else download(blob, "preview.pdf");
+    status("Preview opened with the sample values.");
+  } catch (err) { if (win) win.close(); status(`Could not make the preview: ${err.message}`, true); }
+};
+
+$("btnCsv").onclick = async () => {
+  try {
+    const blob = await (await api("/api/csv-sheet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(S.tpl) })).blob();
+    download(blob, `${S.tpl.name || "template"}_workers.csv`);
+    status("Worker sheet downloaded. Add one row per worker, then press Generate payslips.");
+  } catch (err) { status(`Could not make the worker sheet: ${err.message}`, true); }
+};
+
+$("btnGenerate").onclick = () => $("fileCsv").click();
+$("fileCsv").onchange = async (ev) => {
+  const f = ev.target.files[0]; ev.target.value = ""; if (!f) return;
+  status(`Making payslips from ${f.name}…`);
+  try {
+    const fd = new FormData(); fd.append("template", JSON.stringify(S.tpl)); fd.append("csv_file", f);
+    const res = await api("/api/generate", { method: "POST", body: fd });
+    const count = res.headers.get("X-Payslip-Count"); const missing = res.headers.get("X-Missing-Columns");
+    download(await res.blob(), `${S.tpl.name || "payslips"}_payslips.zip`);
+    status(`Made ${count} payslips.` + (missing ? ` These fields have no column in the sheet, so they used the sample value: ${missing}.` : ""), !!missing);
+  } catch (err) { status(`Could not make payslips: ${err.message}`, true); }
+};
+
+render();
+</script>
+</body>
+</html>
