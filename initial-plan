@@ -1,0 +1,68 @@
+# PayParse AI
+
+### Payroll Document Intelligence Engine
+
+PayParse AI is an intelligent document processing engine designed to automate the extraction, recognition and structuring of payroll information from existing business documents.
+
+It processes PDF payslips, Excel workbooks and wage registers to identify company information, employee details, payroll components, allowances, deductions and statutory contribution fields.
+
+The engine intelligently detects document layouts, identifies spreadsheet column structures, understands payroll terminology and suggests mappings between existing contractor templates and standardized payroll fields.
+
+### Core Capabilities
+
+- **Document Understanding:** Process PDF and Excel payroll documents, including multi-sheet workbooks.
+- **Intelligent Extraction:** Extract company details, employee information, wage components and payroll data.
+- **Format Recognition:** Identify custom payslip and wage-register layouts.
+- **Column Mapping:** Suggest mappings between uploaded document columns and standardized system fields.
+- **Payroll Component Recognition:** Identify wages, allowances, deductions, PF, ESI and other payroll components.
+- **Data Validation:** Detect missing fields, duplicate employee IDs, inconsistent values and extraction errors.
+- **Confidence Scoring:** Assign confidence scores to extracted information and flag uncertain results for human verification.
+- **Structured Output:** Convert extracted information into standardized JSON for integration with payroll applications.
+
+### Architecture
+
+PayParse AI operates as an independent AI service that communicates with the main payroll application through APIs.
+
+It handles document intelligence and data extraction. Actual wage calculations, statutory deductions and payroll compliance rules are handled separately by the payroll calculation engine.
+
+### Objective
+
+To eliminate repetitive manual data entry and make payroll setup easier for small and medium-sized labour contractors by allowing them to use their existing documents and spreadsheet formats.
+
+
+PayParse-AI/
+│
+├── app/
+│   ├── api/
+│   │   └── routes/
+│   │       └── document_routes.py
+│   │
+│   ├── extractors/
+│   │   ├── pdf_extractor.py
+│   │   ├── excel_extractor.py
+│   │   └── ocr_extractor.py
+│   │
+│   ├── intelligence/
+│   │   ├── document_classifier.py
+│   │   ├── field_detector.py
+│   │   ├── component_recognizer.py
+│   │   └── column_mapper.py
+│   │
+│   ├── validators/
+│   │   └── extraction_validator.py
+│   │
+│   ├── schemas/
+│   │   └── payroll_document.py
+│   │
+│   ├── services/
+│   │   └── document_service.py
+│   │
+│   └── main.py
+│
+├── tests/
+├── datasets/
+├── research/
+├── requirements.txt
+├── .env.example
+├── .gitignore
+└── README.md

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Payslip template editor
 
 Turn an existing payslip or bill PDF into an editable template, fix it with drag and drop,
@@ -51,3 +52,17 @@ You can also extract from the command line: `python extractor.py payslip.pdf`
 - Totals like net pay are not calculated; enter them in the worker sheet.
 - If a field is split wrongly, add its label to `KNOWN_LABELS` in `extractor.py`,
   or fix it in the editor by deleting it and placing the right field.
+=======
+# PayParse-AI
+Payroll Document Intelligence Engine An AI-powered document understanding engine that reads existing payslips, Excel workbooks and PDF wage documents, identifies payroll components, understands column structures and converts extracted information into structured data for payroll processing.
+
+Technical naming
+- Engine: PayParse AI
+- GitHub repository: PayParse-AI
+- Backend service: payparse-engine
+- Python service: payparse-ml
+- API: /api/v1/documents/analyze
+- Analysis result: PayrollDocumentAnalysis
+
+
+>>>>>>> 2ad3400877adc28ff1821d9cd6cb2da1e48da849
